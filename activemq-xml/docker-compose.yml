@@ -1,0 +1,89 @@
+version: "3"
+services:
+  kafka:
+    hostname: kafka
+    image: confluentinc/cp-enterprise-kafka:5.0.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://:9092"
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: localhost:9092
+      CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: zookeeper:2181
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+    ports:
+      - "9092:9092"
+  schema-registry:
+    image: confluentinc/cp-schema-registry:5.0.0
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: "zookeeper:2181"
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - '8081:8081'
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.0.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
+  connect:
+    hostname: connect
+    image: jcustenborder/kafka-connect-all
+    depends_on:
+    - schema-registry
+    - kafka
+    ports:
+    - '8083:8083'
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:9092"
+      CONNECT_REST_ADVERTISED_HOST_NAME: target-connect
+      CONNECT_PRODUCER_COMPRESSION_TYPE: lz4
+      CONNECT_GROUP_ID: connect
+      CONNECT_KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_CONFIG_STORAGE_TOPIC: connect_config
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_TOPIC: connect_offset
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: connect_status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: 'false'
+      CONNECT_LOG4J_LOGGERS: 'org.reflections=ERROR'
+    volumes:
+      - './books.xsd:/books.xsd:ro'
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:5.0.0
+    depends_on:
+    - zookeeper
+    - kafka
+    - connect
+    ports:
+    - "9022:9021"
+    environment:
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081/"
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: "kafka:9092"
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      CONTROL_CENTER_CONNECT_CLUSTER: 'connect:8083'
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_KSQL_ENABLE: "false"
+  activemq:
+    image: webcenter/activemq:5.14.3
+    environment:
+      ACTIVEMQ_CONFIG_MAXMEMORY: 1024
+      ACTIVEMQ_STATIC_QUEUES: jmsdata
+      ACTIVEMQ_ADMIN_LOGIN: admin
+      ACTIVEMQ_ADMIN_PASSWORD: admin
+      ACTIVEMQ_CONFIG_DEFAULTACCOUNT: 'true'
+    ports:
+      - '8161:8161'
+      - '61616:61616'
+      - '61613:61613'
